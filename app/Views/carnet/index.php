@@ -13,6 +13,9 @@
     /** @var int $socio_id */
     /** @var array<string, array<string, string>> $tipografia_config */
     $h = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+    $nombrePlantilla = function_exists('mb_strtoupper')
+        ? mb_strtoupper((string) $nombre_completo, 'UTF-8')
+        : strtoupper((string) $nombre_completo);
     $tipografiaPlantilla = [
         'nombre' => [
             'font' => (string) ($posiciones['nombre']['font_family'] ?? "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif"),
@@ -433,7 +436,7 @@
             <?php endif; ?>
 
             <!-- Nombre completo -->
-            <div class="carnet-nombre"><?= $h($nombre_completo) ?></div>
+            <div class="carnet-nombre"><?= $h($nombrePlantilla) ?></div>
 
             <!-- Tipo de socio -->
             <div class="carnet-tipo-socio"><?= $h($tipo_socio) ?></div>

@@ -15,6 +15,9 @@
     /** @var array<string, array<string, string>> $tipografia_config */
     /** @var string $download_rotation */
     $h = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+    $nombrePlantilla = function_exists('mb_strtoupper')
+        ? mb_strtoupper((string) $nombre_completo, 'UTF-8')
+        : strtoupper((string) $nombre_completo);
 
     $tipografiaPlantilla = [
         'nombre' => [
@@ -296,7 +299,7 @@
                 <div class="carnet-foto-placeholder"><span>👤</span></div>
             <?php endif; ?>
 
-            <div class="carnet-nombre"><?= $h($nombre_completo) ?></div>
+            <div class="carnet-nombre"><?= $h($nombrePlantilla) ?></div>
             <div class="carnet-tipo-socio"><?= $h($tipo_socio) ?></div>
             <div class="carnet-num-socio"><?= substr($h($num_socio), -3) ?></div>
             <div class="carnet-valido">
