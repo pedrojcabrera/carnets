@@ -6,9 +6,9 @@ Options -Indexes
 # ----------------------------------------------------------------------
 
 # Turning on the rewrite engine is necessary for the following rules and features.
-# FollowSymLinks must be enabled for this to work.
+# En algunos hosts FollowSymlinks provoca 500; SymLinksIfOwnerMatch mantiene reescritura sin ese fallo.
 <IfModule mod_rewrite.c>
-	Options +FollowSymlinks
+	Options +SymLinksIfOwnerMatch
 	RewriteEngine On
 
 	# If you installed CodeIgniter in a subfolder, you will need to
@@ -37,6 +37,29 @@ Options -Indexes
 	RewriteCond %{HTTP:Authorization} .
 	RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 </IfModule>
+
+# Evitar que navegador/proxy cachee el SW y el manifest.
+<IfModule mod_headers.c>
+	<FilesMatch "^(service-worker\.js|manifest\.json)$">
+		Header set Cache-Control "no-cache, no-store, must-revalidate"
+		Header set Pragma "no-cache"
+		Header set Expires "0"
+	</FilesMatch>
+
+	# Todas las respuestas dinámicas del front controller no deben cachearse.
+	<Files "index.php">
+		Header always set Cache-Control "private, no-store, no-cache, must-revalidate, max-age=0"
+		Header always set Pragma "no-cache"
+		Header always set Expires "0"
+		Header always set Surrogate-Control "no-store"
+		Header always set Vary "Cookie,Authorization"
+	</Files>
+
+	# Evitar revalidaciones por ETag sobre contenido dinámico.
+	Header unset ETag
+</IfModule>
+
+FileETag None
 
 <IfModule !mod_rewrite.c>
 	# If we don't have mod_rewrite installed, all 404's

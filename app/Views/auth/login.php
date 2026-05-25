@@ -4,21 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Acceso — Carnets</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="<?= base_url('vendor/bootstrap/css/bootstrap.min.css') ?>">
     <style>
         body {
-            background: #1e293b;
+            color: #0f172a;
+            background:
+                radial-gradient(900px 500px at 90% -20%, rgba(56, 189, 248, .35) 0%, transparent 60%),
+                radial-gradient(700px 420px at -10% 120%, rgba(148, 163, 184, .35) 0%, transparent 60%),
+                linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 1rem;
         }
         .login-card {
             width: 100%;
             max-width: 400px;
             border-radius: 1rem;
-            border: none;
-            box-shadow: 0 8px 32px rgba(0,0,0,.35);
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 14px 34px rgba(2, 6, 23, .45);
+            background: #ffffff;
         }
         .login-brand {
             text-align: center;
@@ -28,8 +34,22 @@
             font-weight: 700;
         }
         .login-brand i { font-size: 2.5rem; color: #3b82f6; display: block; margin-bottom: .5rem; }
+
+        .form-label {
+            color: #0f172a;
+        }
+
+        .form-control {
+            border-color: #94a3b8;
+            color: #0f172a;
+        }
+
+        .form-control:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 .2rem rgba(37, 99, 235, .2);
+        }
     </style>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="<?= base_url('vendor/bootstrap-icons/css/bootstrap-icons.min.css') ?>">
 </head>
 <body>
 <?php $h = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); ?>
@@ -58,7 +78,7 @@
             </div>
         <?php endif; ?>
 
-        <form method="post" action="/login">
+        <form method="post" action="/index.php/login">
             <?= csrf_field() ?>
 
             <div class="mb-3">
@@ -94,6 +114,6 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="<?= base_url('vendor/bootstrap/js/bootstrap.bundle.min.js') ?>"></script>
 </body>
 </html>

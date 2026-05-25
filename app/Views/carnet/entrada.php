@@ -214,7 +214,7 @@
                 <div class="message message--info"><?= htmlspecialchars((string) $info, ENT_QUOTES, 'UTF-8') ?></div>
             <?php endif; ?>
 
-            <form method="post" action="/m/abrir" autocomplete="off">
+            <form method="post" action="/index.php/m/abrir" autocomplete="off">
                 <?= csrf_field() ?>
                 <label class="form-label" for="dni">DNI</label>
                 <div class="dni-row">
@@ -253,6 +253,13 @@
             <p class="hint">
                 Introduce tu DNI. Te enviaremos un código de 6 cifras por email para validar el acceso.
             </p>
+
+            <div class="dni-row" style="margin-top:.9rem;">
+                <button class="submit-btn" id="instalarAppBtn" type="button" style="display:none; width:100%;">
+                    Instalar aplicacion
+                </button>
+            </div>
+            <p class="hint" id="instalarAppHint" style="display:none; margin-top:.55rem;"></p>
         </section>
 
         <div class="footer">Acceso público del carnet</div>
@@ -262,22 +269,67 @@
     </main>
     <script>
         (function () {
-            if (!('serviceWorker' in navigator)) return;
-            var refreshing = false;
-            navigator.serviceWorker.addEventListener('controllerchange', function () {
-                if (!refreshing) { refreshing = true; window.location.reload(); }
+            if (!('serviceWorker' in navigator)) {
+                return;
+            }
+
+            navigator.serviceWorker.register('/service-worker.js').catch(function () {});
+        }());
+
+        (function () {
+            const installBtn = document.getElementById('instalarAppBtn');
+            const installHint = document.getElementById('instalarAppHint');
+            let deferredPrompt = null;
+
+            if (!installBtn || !installHint) {
+                return;
+            }
+
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                || window.navigator.standalone === true;
+
+            if (isStandalone) {
+                installHint.style.display = 'block';
+                installHint.textContent = 'La app ya esta instalada en este dispositivo.';
+                return;
+            }
+
+            window.addEventListener('beforeinstallprompt', function (event) {
+                event.preventDefault();
+                deferredPrompt = event;
+                installBtn.style.display = 'block';
+                installHint.style.display = 'block';
+                installHint.textContent = 'Pulsa para instalar Carnet Digital como aplicacion.';
             });
-            navigator.serviceWorker.register('/service-worker.js').then(function (reg) {
-                reg.addEventListener('updatefound', function () {
-                    var newWorker = reg.installing;
-                    if (!newWorker) return;
-                    newWorker.addEventListener('statechange', function () {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            newWorker.postMessage({ type: 'SKIP_WAITING' });
-                        }
-                    });
-                });
-            }).catch(function () {});
+
+            installBtn.addEventListener('click', async function () {
+                if (!deferredPrompt) {
+                    installHint.style.display = 'block';
+                    installHint.textContent = 'Si no aparece el boton de instalar, usa el menu del navegador: Agregar a pantalla de inicio.';
+                    return;
+                }
+
+                deferredPrompt.prompt();
+                try {
+                    await deferredPrompt.userChoice;
+                } catch (error) {}
+
+                deferredPrompt = null;
+                installBtn.style.display = 'none';
+            });
+
+            window.addEventListener('appinstalled', function () {
+                installBtn.style.display = 'none';
+                installHint.style.display = 'block';
+                installHint.textContent = 'Carnet Digital se instalo correctamente.';
+            });
+
+            // iOS Safari no dispara beforeinstallprompt.
+            const isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent || '');
+            if (isIos) {
+                installHint.style.display = 'block';
+                installHint.textContent = 'En iPhone/iPad: comparte y elige Agregar a pantalla de inicio.';
+            }
         }());
     </script>
 </body>

@@ -39,6 +39,26 @@ abstract class BaseController extends Controller
         // Caution: Do not edit this line.
         parent::initController($request, $response, $logger);
 
+        $path = trim((string) $request->getUri()->getPath(), '/');
+
+        $isPwaRoute = $path === 'm'
+            || str_starts_with($path, 'm/')
+            || $path === 'carnet'
+            || str_starts_with($path, 'carnet/')
+            || str_starts_with($path, 'c/');
+
+        // Backoffice/auth: nunca cachear HTML dinámico (evita datos viejos en navegación normal).
+        if (! $isPwaRoute) {
+            $response->setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
+            $response->setHeader('Pragma', 'no-cache');
+            $response->setHeader('Expires', '0');
+            $response->setHeader('Surrogate-Control', 'no-store');
+            $response->setHeader('Vary', 'Cookie,Authorization');
+        }
+
+        // Marca visible en cabeceras para confirmar que remoto sirve la versión actual.
+        $response->setHeader('X-App-Revision', '2026-05-24-r3');
+
         // Preload any models, libraries, etc, here.
         // $this->session = service('session');
     }

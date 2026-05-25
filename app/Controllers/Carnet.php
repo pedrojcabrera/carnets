@@ -75,7 +75,7 @@ class Carnet extends BaseController
                     && (int) $pendingActual['expires_at'] >= time();
 
                 if ($tienePendiente) {
-                    return redirect()->to('/m')
+                    return redirect()->to('/index.php/m')
                         ->withInput()
                         ->with('otp_required', true)
                         ->with('info', 'Ya se envio un codigo de verificacion a tu email.');
@@ -106,7 +106,7 @@ class Carnet extends BaseController
                     ]);
 
                     if (ENVIRONMENT !== 'production') {
-                        return redirect()->to('/m')
+                        return redirect()->to('/index.php/m')
                             ->withInput()
                             ->with('otp_required', true)
                             ->with('info', 'SMTP no disponible en local. Codigo temporal de prueba: ' . $codigoGenerado);
@@ -117,7 +117,7 @@ class Carnet extends BaseController
                     return $this->rejectVerification('No se pudo enviar el codigo de verificacion. Intentalo de nuevo en unos minutos.', true);
                 }
 
-                return redirect()->to('/m')
+                return redirect()->to('/index.php/m')
                     ->withInput()
                     ->with('otp_required', true)
                     ->with('info', 'Se ha enviado un codigo de verificacion a tu email.');
@@ -143,7 +143,7 @@ class Carnet extends BaseController
             $session->remove(self::OTP_SESSION_KEY);
         }
 
-        return redirect()->to('/c/' . rawurlencode($dni));
+        return redirect()->to('/index.php/c/' . rawurlencode($dni));
     }
 
     /**
@@ -168,6 +168,12 @@ class Carnet extends BaseController
                 'El carnet solicitado no existe.'
             );
         }
+
+        $camposFaltantes = $this->getMissingSocioFields($socio);
+        $carnetDisponible = $camposFaltantes === [];
+        $avisoCamposFaltantes = $carnetDisponible
+            ? ''
+            : 'Faltan datos en su ficha de socio: ' . implode(', ', $camposFaltantes) . '.';
 
         $plantilla  = $plantillaModel->getActiva();
         $posiciones = [
@@ -235,6 +241,8 @@ class Carnet extends BaseController
             'download_rotation' => $rotacionDescarga,
             'socio_id'        => $socio->id,
             'tipografia_config' => $configTipografia,
+            'carnet_disponible' => $carnetDisponible,
+            'aviso_campos_faltantes' => $avisoCamposFaltantes,
         ]);
     }
 
@@ -401,26 +409,52 @@ class Carnet extends BaseController
 
     private function hasMissingSocioFields(object $socio): bool
     {
+        return $this->getMissingSocioFields($socio) !== [];
+    }
+
+    /**
+     * Devuelve los campos obligatorios que faltan en la ficha del socio.
+     *
+     * @return list<string>
+     */
+    private function getMissingSocioFields(object $socio): array
+    {
         $required = [
             'dni',
             'nombre_completo',
             'num_socio',
             'tipo_socio',
             'valido_hasta',
+            'url_foto',
         ];
+
+        $labels = [
+            'dni' => 'DNI',
+            'nombre_completo' => 'nombre completo',
+            'num_socio' => 'número de socio',
+            'tipo_socio' => 'tipo de socio',
+            'valido_hasta' => 'fecha de validez',
+            'url_foto' => 'foto',
+        ];
+
+        $missing = [];
 
         foreach ($required as $field) {
             $value = $socio->{$field} ?? null;
             if ($value === null || trim((string) $value) === '') {
-                log_message('warning', 'OTP hasMissingSocioFields: campo [{field}] vacío o nulo para socio {dni}.', [
-                    'field' => $field,
-                    'dni'   => $socio->dni ?? '?',
-                ]);
-                return true;
+                $missing[] = $labels[$field] ?? $field;
+                continue;
+            }
+
+            if ($field === 'url_foto') {
+                $rutaFoto = FCPATH . ltrim((string) $value, '/');
+                if (! is_file($rutaFoto)) {
+                    $missing[] = $labels[$field] ?? $field;
+                }
             }
         }
 
-        return false;
+        return array_values(array_unique($missing));
     }
 
     /**
@@ -489,7 +523,7 @@ class Carnet extends BaseController
 
     private function rejectVerification(string $reason, bool $withInput = false, bool $otpRequired = false)
     {
-        $redirect = $otpRequired ? redirect()->to('/m') : redirect()->back();
+        $redirect = $otpRequired ? redirect()->to('/index.php/m') : redirect()->back();
 
         if ($withInput) {
             $redirect = $redirect->withInput();

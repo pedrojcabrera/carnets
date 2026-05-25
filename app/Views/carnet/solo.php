@@ -14,6 +14,8 @@
     /** @var int $socio_id */
     /** @var array<string, array<string, string>> $tipografia_config */
     /** @var string $download_rotation */
+    /** @var bool $carnet_disponible */
+    /** @var string $aviso_campos_faltantes */
     $h = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
     $nombrePlantilla = function_exists('mb_strtoupper')
         ? mb_strtoupper((string) $nombre_completo, 'UTF-8')
@@ -144,13 +146,21 @@
             border-radius: .75rem;
         }
 
-        .carnet-foto {
+        .carnet-foto-frame {
             position: absolute;
             top: <?= (int)($posiciones['foto']['top'] ?? 120) ?>px;
             left: <?= (int)($posiciones['foto']['left'] ?? 30) ?>px;
             width: <?= (int)($posiciones['foto']['width'] ?? 80) ?>px;
             height: <?= (int)($posiciones['foto']['height'] ?? 80) ?>px;
             box-shadow: 4px 4px 10px rgba(0,0,0,0.6);
+            overflow: hidden;
+            border-radius: 0;
+        }
+
+        .carnet-foto {
+            width: 100%;
+            height: 100%;
+            display: block;
             object-fit: cover;
             object-position: center;
             border: 0;
@@ -294,7 +304,9 @@
             >
 
             <?php if (! empty($url_foto)): ?>
-                <img src="<?= $h($url_foto) ?>" alt="Foto del socio" class="carnet-foto">
+                <div class="carnet-foto-frame">
+                    <img src="<?= $h($url_foto) ?>" alt="Foto del socio" class="carnet-foto">
+                </div>
             <?php else: ?>
                 <div class="carnet-foto-placeholder"><span>👤</span></div>
             <?php endif; ?>
@@ -312,29 +324,26 @@
     </div>
 
     <div class="actions">
-        <button type="button" class="btn btn--primary" id="guardarImagenBtn">Guardar como imagen</button>
+        <?php if (! empty($carnet_disponible)): ?>
+            <button type="button" class="btn btn--primary" id="guardarImagenBtn">Guardar como imagen</button>
+        <?php else: ?>
+            <button type="button" class="btn btn--primary" id="guardarImagenBtn" disabled>Faltan datos para descargar</button>
+        <?php endif; ?>
     </div>
     <div class="status" id="estadoGuardado"></div>
-    <p class="hint">Consejo: tras guardar la imagen en la galería, podrás abrirla sin conexión desde Fotos.</p>
+    <?php if (! empty($carnet_disponible)): ?>
+        <p class="hint">Consejo: tras guardar la imagen en la galería, podrás abrirla sin conexión desde Fotos.</p>
+    <?php else: ?>
+        <p class="hint" style="color:#fca5a5;"><?= $h($aviso_campos_faltantes ?: 'Faltan datos en su ficha de socio.') ?></p>
+    <?php endif; ?>
 
     <script>
         (function () {
-            if (!('serviceWorker' in navigator)) return;
-            var refreshing = false;
-            navigator.serviceWorker.addEventListener('controllerchange', function () {
-                if (!refreshing) { refreshing = true; window.location.reload(); }
-            });
-            navigator.serviceWorker.register('/service-worker.js').then(function (reg) {
-                reg.addEventListener('updatefound', function () {
-                    var newWorker = reg.installing;
-                    if (!newWorker) return;
-                    newWorker.addEventListener('statechange', function () {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            newWorker.postMessage({ type: 'SKIP_WAITING' });
-                        }
-                    });
-                });
-            }).catch(function () {});
+            if (!('serviceWorker' in navigator)) {
+                return;
+            }
+
+            navigator.serviceWorker.register('/service-worker.js').catch(function () {});
         }());
 
         (function () {
@@ -347,6 +356,8 @@
             const baseWidth = <?= (int) $fondo_ancho ?>;
             const baseHeight = <?= (int) $fondo_alto ?>;
             const downloadRotation = <?= json_encode($download_rotation ?? 'keep') ?>;
+            const carnetDisponible = <?= ! empty($carnet_disponible) ? 'true' : 'false' ?>;
+            const avisoCamposFaltantes = <?= json_encode((string) ($aviso_campos_faltantes ?? '')) ?>;
 
             function rotateCanvas(sourceCanvas, rotation) {
                 if (rotation !== 'right' && rotation !== 'left') {
@@ -403,6 +414,11 @@
             }
 
             async function guardarCarnetComoImagen() {
+                if (!carnetDisponible) {
+                    setStatus(avisoCamposFaltantes || 'Faltan datos en su ficha de socio.', true);
+                    return;
+                }
+
                 if (!exportable || typeof html2canvas === 'undefined') {
                     setStatus('No se pudo preparar la imagen.', true);
                     return;
@@ -448,6 +464,10 @@
 
             if (saveBtn) {
                 saveBtn.addEventListener('click', guardarCarnetComoImagen);
+            }
+
+            if (!carnetDisponible) {
+                setStatus(avisoCamposFaltantes || 'Faltan datos en su ficha de socio.', true);
             }
 
             ajustarEscalaVista();

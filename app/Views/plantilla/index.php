@@ -21,7 +21,7 @@ $fontOptions = [
     </h1>
 </div>
 
-<form method="post" action="/plantilla/guardar" enctype="multipart/form-data">
+<form method="post" action="/index.php/plantilla/guardar" enctype="multipart/form-data">
     <?= csrf_field() ?>
 
 <div class="row g-4 align-items-start">

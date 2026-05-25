@@ -10,16 +10,8 @@ use CodeIgniter\Router\RouteCollection;
 //  RUTAS PÚBLICAS
 // ─────────────────────────────────────────
 
-// Redirigir raíz según dispositivo: escritorio a login, móvil al acceso público del carnet
-$routes->get('/', static function () {
-    $agent = service('request')->getUserAgent();
-
-    if ($agent !== null && $agent->isMobile()) {
-        return redirect()->to('/m');
-    }
-
-    return redirect()->to('/login');
-});
+// Ruta raíz directa para minimizar trabajo del router.
+$routes->get('/', 'Auth::index');
 
 // Autenticación
 $routes->get('login',  'Auth::index');
@@ -30,10 +22,17 @@ $routes->get('logout', 'Auth::logout');
 $routes->get('m', 'Carnet::inicio');
 $routes->post('m/abrir', 'Carnet::abrir');
 $routes->get('c/(:segment)', 'Carnet::verPorDni/$1');
-$routes->get('carnet', 'Carnet::inicio');
+// Compatibilidad con URLs antiguas.
+$routes->get('carnet', static function () {
+    return redirect()->to('/index.php/m', 302);
+});
 $routes->post('carnet/abrir', 'Carnet::abrir');
-$routes->get('carnet/ver/(:segment)', 'Carnet::ver/$1');
-$routes->get('carnet/dni/(:segment)', 'Carnet::verPorDni/$1');
+$routes->get('carnet/ver/(:segment)', static function (string $dni) {
+    return redirect()->to('/index.php/c/' . rawurlencode($dni), 302);
+});
+$routes->get('carnet/dni/(:segment)', static function (string $dni) {
+    return redirect()->to('/index.php/c/' . rawurlencode($dni), 302);
+});
 $routes->get('carnet/preferencias/(:segment)', 'Carnet::preferencias/$1');
 $routes->post('carnet/preferencias/(:segment)', 'Carnet::guardarPreferencias/$1');
 
@@ -46,6 +45,10 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
     // Dashboard
     $routes->get('dashboard', 'Dashboard::index');
 
+    // Perfil de usuario (todos los usuarios autenticados)
+    $routes->get ('perfil',          'Usuarios::perfil');
+    $routes->post('perfil/actualizar', 'Usuarios::actualizarPerfil');
+
     // Socios – CRUD completo
     $routes->get ('socios',                   'Socios::index');
     $routes->get ('socios/crear',             'Socios::crear');
@@ -57,6 +60,14 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
     // Plantilla del carnet
     $routes->get ('plantilla',         'Plantilla::index');
     $routes->post('plantilla/guardar', 'Plantilla::guardar');
+
+    // Usuarios – CRUD (solo admin y superadmin)
+    $routes->get ('usuarios',                    'Usuarios::index');
+    $routes->get ('usuarios/crear',              'Usuarios::crear');
+    $routes->post('usuarios/guardar',            'Usuarios::guardar');
+    $routes->get ('usuarios/editar/(:num)',      'Usuarios::editar/$1');
+    $routes->post('usuarios/actualizar/(:num)',  'Usuarios::actualizar/$1');
+    $routes->get ('usuarios/eliminar/(:num)',    'Usuarios::eliminar/$1');
 
     // Manual de uso
     $routes->get('manual', 'Manual::index');

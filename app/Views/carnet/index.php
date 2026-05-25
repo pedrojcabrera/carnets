@@ -219,13 +219,21 @@
         /* ── Elementos superpuestos ───────────────────────── */
 
         /* Foto del socio */
-        .carnet-foto {
+        .carnet-foto-frame {
             position: absolute;
             top:    <?= (int)($posiciones['foto']['top']    ?? 120) ?>px;
             left:   <?= (int)($posiciones['foto']['left']   ?? 30)  ?>px;
             width:  <?= (int)($posiciones['foto']['width']  ?? 80)  ?>px;
             height: <?= (int)($posiciones['foto']['height'] ?? 80)  ?>px;
             box-shadow: 4px 4px 10px rgba(0,0,0,0.6);
+            overflow: hidden;
+            border-radius: 0;
+        }
+
+        .carnet-foto {
+            width: 100%;
+            height: 100%;
+            display: block;
             object-fit: cover;
             object-position: center;
             border-radius: 0;
@@ -424,11 +432,13 @@
 
             <!-- Foto del socio -->
             <?php if (! empty($url_foto)): ?>
-                <img
-                    src="<?= $h($url_foto) ?>"
-                    alt="Foto del socio"
-                    class="carnet-foto"
-                >
+                <div class="carnet-foto-frame">
+                    <img
+                        src="<?= $h($url_foto) ?>"
+                        alt="Foto del socio"
+                        class="carnet-foto"
+                    >
+                </div>
             <?php else: ?>
                 <div class="carnet-foto-placeholder">
                     <span>👤</span>
@@ -459,24 +469,11 @@
     <!-- Registro del Service Worker -->
     <script>
         (function () {
-            if (!('serviceWorker' in navigator)) return;
-            var refreshing = false;
-            navigator.serviceWorker.addEventListener('controllerchange', function () {
-                if (!refreshing) { refreshing = true; window.location.reload(); }
-            });
-            navigator.serviceWorker.register('/service-worker.js').then(function (reg) {
-                reg.addEventListener('updatefound', function () {
-                    var newWorker = reg.installing;
-                    if (!newWorker) return;
-                    newWorker.addEventListener('statechange', function () {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            newWorker.postMessage({ type: 'SKIP_WAITING' });
-                        }
-                    });
-                });
-            }).catch(function (err) {
-                console.warn('[SW] No pudo registrarse:', err);
-            });
+            if (!('serviceWorker' in navigator)) {
+                return;
+            }
+
+            navigator.serviceWorker.register('/service-worker.js').catch(function () {});
         }());
 
         (function () {
@@ -488,7 +485,7 @@
             const colorValueLabels = Array.from(document.querySelectorAll('[data-color-value]'));
             const storageKey = 'carnetTypographySettingsV1';
             const socioId = <?= (int) $socio_id ?>;
-            const apiUrl = '/carnet/preferencias/' + socioId;
+            const apiUrl = '/index.php/carnet/preferencias/' + socioId;
             const serverConfig = <?= json_encode($tipografia_config ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
             const templateConfig = <?= json_encode($tipografiaPlantilla, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
             let saveTimer = null;

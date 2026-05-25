@@ -2,7 +2,7 @@
 <?php $h = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); ?>
 
 <div class="d-flex align-items-center gap-2 mb-4">
-    <a href="/socios" class="btn btn-sm btn-outline-secondary">
+    <a href="/index.php/socios" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-arrow-left"></i>
     </a>
     <h1 class="h4 mb-0 fw-bold">
@@ -12,7 +12,7 @@
 
 <div class="card border-0 shadow-sm" style="max-width: 680px;">
     <div class="card-body">
-        <form method="post" action="/socios/guardar" enctype="multipart/form-data">
+        <form method="post" action="/index.php/socios/guardar" enctype="multipart/form-data">
             <?= csrf_field() ?>
 
             <!-- Nombre completo -->
@@ -117,7 +117,7 @@
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-floppy-fill me-1"></i> Guardar
                 </button>
-                <a href="/socios" class="btn btn-outline-secondary">Cancelar</a>
+                <a href="/index.php/socios" class="btn btn-outline-secondary">Cancelar</a>
             </div>
         </form>
     </div>

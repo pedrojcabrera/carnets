@@ -3,7 +3,7 @@
 <?php $h = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); ?>
 
 <div class="d-flex align-items-center gap-2 mb-4">
-    <a href="/socios" class="btn btn-sm btn-outline-secondary">
+    <a href="/index.php/socios" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-arrow-left"></i>
     </a>
     <h1 class="h4 mb-0 fw-bold">
@@ -13,7 +13,7 @@
 
 <div class="card border-0 shadow-sm" style="max-width: 680px;">
     <div class="card-body">
-        <form method="post" action="/socios/actualizar/<?= $h($socio->id) ?>" enctype="multipart/form-data">
+        <form method="post" action="/index.php/socios/actualizar/<?= $h($socio->id) ?>" enctype="multipart/form-data">
             <?= csrf_field() ?>
 
             <!-- Nombre completo -->
@@ -117,13 +117,26 @@
                     accept="image/jpeg,image/png,image/webp"
                 >
                 <div class="form-text">Dejar vacío para mantener la foto actual. JPG, PNG o WebP · Máx. 2 MB</div>
+
+                <div class="form-check mt-2">
+                    <input
+                        type="checkbox"
+                        class="form-check-input"
+                        id="eliminar_foto"
+                        name="eliminar_foto"
+                        value="1"
+                        <?= old('eliminar_foto') === '1' ? 'checked' : '' ?>
+                    >
+                    <label class="form-check-label" for="eliminar_foto">Quitar la foto actual</label>
+                </div>
+                <div class="form-text text-danger">Si marcas esta opción y no subes una nueva imagen, la foto actual se eliminará.</div>
             </div>
 
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-floppy-fill me-1"></i> Actualizar
                 </button>
-                <a href="/socios" class="btn btn-outline-secondary">Cancelar</a>
+                <a href="/index.php/socios" class="btn btn-outline-secondary">Cancelar</a>
             </div>
         </form>
     </div>

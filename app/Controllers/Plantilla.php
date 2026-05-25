@@ -188,7 +188,7 @@ class Plantilla extends BaseController
             $this->model->insert($datos);
         }
 
-        return redirect()->to('/plantilla')->with('success', 'Plantilla guardada correctamente.');
+        return redirect()->to('/index.php/plantilla')->with('success', 'Plantilla guardada correctamente.');
     }
 
     private function sanitizeHexColor(string $value): string

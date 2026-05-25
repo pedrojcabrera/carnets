@@ -31,13 +31,13 @@
             <div class="card-body">
                 <h6 class="card-title fw-semibold mb-3">Accesos rápidos</h6>
                 <div class="d-flex flex-wrap gap-2">
-                    <a href="/socios/crear" class="btn btn-sm btn-primary">
+                    <a href="/index.php/socios/crear" class="btn btn-sm btn-primary">
                         <i class="bi bi-person-plus-fill me-1"></i> Nuevo socio
                     </a>
-                    <a href="/socios" class="btn btn-sm btn-outline-secondary">
+                    <a href="/index.php/socios" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-list me-1"></i> Ver socios
                     </a>
-                    <a href="/plantilla" class="btn btn-sm btn-outline-secondary">
+                    <a href="/index.php/plantilla" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-card-image me-1"></i> Configurar plantilla
                     </a>
                 </div>
