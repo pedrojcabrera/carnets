@@ -130,7 +130,6 @@ $sortIcon = static function (string $column) use ($sort, $dir): string {
                                     <?php if (! empty($socio->carnet_disponible)): ?>
                                         <a href="/index.php/carnet/ver/<?= $socio->id ?>"
                                            class="btn btn-sm btn-outline-info"
-                                           target="_blank"
                                            title="Ver carnet">
                                             <i class="bi bi-credit-card"></i>
                                         </a>

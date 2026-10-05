@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Models\SocioModel;
 use App\Models\PlantillaModel;
 use App\Models\CarnetPreferenciaModel;
+use CodeIgniter\Session\Session;
 
 /**
  * Controlador del carnet digital (PWA pública).
@@ -12,6 +13,10 @@ use App\Models\CarnetPreferenciaModel;
 class Carnet extends BaseController
 {
     private const OTP_SESSION_KEY = 'carnet_otp_pending';
+    private const TRUSTED_DNI_SESSION_KEY = 'carnet_trusted_dni';
+
+    private const FACE_KEYS = ['anverso', 'reverso'];
+    private const REVERSE_EXTRA_KEYS = ['texto_legal', 'instrucciones', 'qr'];
     private const OTP_TTL_SECONDS = 600;
     private const VERIFICATION_ERROR_MESSAGE = 'Problema de verificacion. Por favor, intente de nuevo una vez solventado el problema.';
 
@@ -29,8 +34,12 @@ class Carnet extends BaseController
      */
     public function inicio(): string
     {
+        $session = session();
+        $trustedDni = $this->getTrustedDni($session);
+
         return view('carnet/entrada', [
-            'dni' => old('dni', ''),
+            'dni' => old('dni', $trustedDni),
+            'trusted_dni' => $trustedDni,
             'error' => session()->getFlashdata('error'),
             'info' => session()->getFlashdata('info'),
             'otp_required' => (bool) session()->getFlashdata('otp_required'),
@@ -55,19 +64,31 @@ class Carnet extends BaseController
 
         $socio = $this->findSocioByDni($dni);
 
-        if (! is_object($socio) || $this->hasMissingSocioFields($socio)) {
-            log_message('warning', 'OTP request rejected: socio not found or missing required fields for DNI {dni}.', [
+        if (! is_object($socio)) {
+            log_message('warning', 'OTP request rejected: socio not found for DNI {dni}.', [
                 'dni' => $dni,
             ]);
-            if (! is_object($socio)) {
-                return $this->rejectVerification('No existe socio para el DNI indicado: ' . $dni . '.', true);
-            }
 
-            return $this->rejectVerification('Faltan campos obligatorios para el socio con DNI ' . $dni . '.', true);
+            return $this->rejectVerification('No existe socio para el DNI indicado: ' . $dni . '.', true);
         }
 
+        if ($this->hasMissingSocioFields($socio)) {
+            log_message('notice', 'OTP request with incomplete socio data for DNI {dni}. Continuing with email verification.', [
+                'dni' => $dni,
+            ]);
+        }
+
+        $trustedDni = $this->getTrustedDni($session);
+        $esDniConfiable = $esFlujoMovil
+            && $trustedDni !== ''
+            && hash_equals($trustedDni, $dni);
+
         if ($esFlujoMovil) {
-            if ($codigo === '') {
+            $requiereOtp = ! $esDniConfiable;
+
+            if (! $requiereOtp) {
+                $session->remove(self::OTP_SESSION_KEY);
+            } elseif ($codigo === '') {
                 $pendingActual = $session->get(self::OTP_SESSION_KEY);
                 $tienePendiente = is_array($pendingActual)
                     && isset($pendingActual['dni'], $pendingActual['expires_at'])
@@ -123,24 +144,27 @@ class Carnet extends BaseController
                     ->with('info', 'Se ha enviado un codigo de verificacion a tu email.');
             }
 
-            $pending = $session->get(self::OTP_SESSION_KEY);
-            $esPendienteValido = is_array($pending)
-                && isset($pending['dni'], $pending['hash'], $pending['expires_at'])
-                && (string) $pending['dni'] === $dni
-                && is_string($pending['hash'])
-                && (int) $pending['expires_at'] >= time()
-                && password_verify($codigo, (string) $pending['hash']);
+            if ($requiereOtp) {
+                $pending = $session->get(self::OTP_SESSION_KEY);
+                $esPendienteValido = is_array($pending)
+                    && isset($pending['dni'], $pending['hash'], $pending['expires_at'])
+                    && (string) $pending['dni'] === $dni
+                    && is_string($pending['hash'])
+                    && (int) $pending['expires_at'] >= time()
+                    && password_verify($codigo, (string) $pending['hash']);
 
-            if (! $esPendienteValido) {
+                if (! $esPendienteValido) {
+                    $session->remove(self::OTP_SESSION_KEY);
+                    log_message('warning', 'OTP validation failed for DNI {dni}.', [
+                        'dni' => $dni,
+                    ]);
+
+                    return $this->rejectVerification('Código OTP inválido o caducado.', true, true);
+                }
+
                 $session->remove(self::OTP_SESSION_KEY);
-                log_message('warning', 'OTP validation failed for DNI {dni}.', [
-                    'dni' => $dni,
-                ]);
-
-                return $this->rejectVerification('Código OTP inválido o caducado.', true, true);
+                $session->set(self::TRUSTED_DNI_SESSION_KEY, $dni);
             }
-
-            $session->remove(self::OTP_SESSION_KEY);
         }
 
         return redirect()->to('/index.php/c/' . rawurlencode($dni));
@@ -176,46 +200,20 @@ class Carnet extends BaseController
             : 'Faltan datos en su ficha de socio: ' . implode(', ', $camposFaltantes) . '.';
 
         $plantilla  = $plantillaModel->getActiva();
-        $posiciones = [
-            '_canvas'     => ['width' => '360', 'height' => '540'],
-            'foto'        => ['top' => '120', 'left' => '30',  'width' => '80',  'height' => '80'],
-            'nombre'      => ['top' => '220', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00'],
-            'tipo_socio'  => ['top' => '235', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00'],
-            'num_socio'   => ['top' => '250', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00'],
-            'valido_hasta'=> ['top' => '280', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00'],
-        ];
+        $templateConfig = $this->normalizeTemplateConfig($plantilla);
+        $caras = $templateConfig['caras'];
+        $rotacionDescarga = $templateConfig['download_rotation'];
 
-        if ($plantilla && ! empty($plantilla->config_posiciones)) {
-            $guardadas = json_decode($plantilla->config_posiciones, true);
-
-            if (is_array($guardadas)) {
-                $posiciones = array_replace_recursive($posiciones, $guardadas);
-            }
-        }
-
-        $fondoAncho = (int) ($posiciones['_canvas']['width'] ?? 360);
-        $fondoAlto = (int) ($posiciones['_canvas']['height'] ?? 540);
-
-        if (($fondoAncho <= 0 || $fondoAlto <= 0) && $plantilla && ! empty($plantilla->url_fondo)) {
-            $path = parse_url((string) $plantilla->url_fondo, PHP_URL_PATH);
-            $path = is_string($path) ? ltrim($path, '/\\') : '';
-            $localPath = $path !== '' ? FCPATH . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path) : '';
-
-            if ($localPath !== '' && is_file($localPath)) {
-                $imgInfo = @getimagesize($localPath);
-                if (is_array($imgInfo)) {
-                    $fondoAncho = (int) ($imgInfo[0] ?? 360);
-                    $fondoAlto = (int) ($imgInfo[1] ?? 540);
-                }
-            }
-        }
-
-        if ($fondoAncho <= 0 || $fondoAlto <= 0) {
-            $fondoAncho = 360;
-            $fondoAlto = 540;
-        }
-
-        $rotacionDescarga = $this->sanitizeDownloadRotation((string) ($posiciones['_download']['rotation'] ?? 'keep'));
+        $fondoAncho = max(
+            (int) ($caras['anverso']['_canvas']['width'] ?? 360),
+            (int) ($caras['reverso']['_canvas']['width'] ?? 0),
+            360
+        );
+        $fondoAlto = max(
+            (int) ($caras['anverso']['_canvas']['height'] ?? 540),
+            (int) ($caras['reverso']['_canvas']['height'] ?? 0),
+            540
+        );
 
         $numSocioFormateado = str_pad((string) $socio->num_socio, 6, '0', STR_PAD_LEFT);
         $preferencias = $preferenciaModel->getBySocioId((int) $socio->id);
@@ -234,8 +232,10 @@ class Carnet extends BaseController
             'num_socio'       => $numSocioFormateado,
             'valido_hasta'    => $socio->valido_hasta,
             'url_foto'        => $socio->url_foto,
-            'url_fondo'       => $plantilla && ! empty($plantilla->url_fondo) ? (string) $plantilla->url_fondo : '/carnet/base.png',
-            'posiciones'      => $posiciones,
+            // Compatibilidad con vistas antiguas desplegadas parcialmente en host.
+            'url_fondo'       => (string) ($caras['anverso']['url_fondo'] ?? '/carnet/base.png'),
+            'posiciones'      => is_array($caras['anverso'] ?? null) ? $caras['anverso'] : [],
+            'caras'           => $caras,
             'fondo_ancho'     => $fondoAncho,
             'fondo_alto'      => $fondoAlto,
             'download_rotation' => $rotacionDescarga,
@@ -243,7 +243,169 @@ class Carnet extends BaseController
             'tipografia_config' => $configTipografia,
             'carnet_disponible' => $carnetDisponible,
             'aviso_campos_faltantes' => $avisoCamposFaltantes,
+            'tiene_reverso'   => $this->faceHasVisibleContent($caras['reverso']),
+            'qr_default_value' => site_url('c/' . rawurlencode((string) ($socio->dni ?? $ref))),
         ]);
+    }
+
+    private function normalizeTemplateConfig(?object $plantilla): array
+    {
+        $caras = [
+            'anverso' => $this->getDefaultFaceConfig('anverso'),
+            'reverso' => $this->getDefaultFaceConfig('reverso'),
+        ];
+        $downloadRotation = 'keep';
+
+        if ($plantilla) {
+            $guardadas = [];
+            if (! empty($plantilla->config_posiciones)) {
+                $decoded = json_decode((string) $plantilla->config_posiciones, true);
+                $guardadas = is_array($decoded) ? $decoded : [];
+            }
+
+            if (isset($guardadas['anverso']) && is_array($guardadas['anverso'])) {
+                foreach (self::FACE_KEYS as $faceKey) {
+                    $caras[$faceKey] = array_replace_recursive(
+                        $caras[$faceKey],
+                        is_array($guardadas[$faceKey] ?? null) ? $guardadas[$faceKey] : []
+                    );
+                }
+            } else {
+                $caras['anverso'] = array_replace_recursive($caras['anverso'], $guardadas);
+            }
+
+            if (! empty($plantilla->url_fondo)) {
+                $caras['anverso']['url_fondo'] = (string) $plantilla->url_fondo;
+            }
+
+            $downloadRotation = $this->sanitizeDownloadRotation((string) ($guardadas['_download']['rotation'] ?? 'keep'));
+        }
+
+        foreach (self::FACE_KEYS as $faceKey) {
+            $caras[$faceKey]['url_fondo'] = $this->resolveFaceBackgroundUrl($caras[$faceKey], $faceKey === 'anverso' ? '/carnet/base.png' : '');
+            $caras[$faceKey]['_canvas'] = $this->resolveFaceCanvas($caras[$faceKey]);
+
+            $visibleKeys = ['foto', 'nombre', 'tipo_socio', 'num_socio', 'valido_hasta'];
+            if ($faceKey === 'reverso') {
+                $visibleKeys = array_merge($visibleKeys, self::REVERSE_EXTRA_KEYS);
+            }
+
+            foreach ($visibleKeys as $elementKey) {
+                if (! isset($caras[$faceKey][$elementKey]['visible'])) {
+                    $caras[$faceKey][$elementKey]['visible'] = $faceKey === 'anverso' ? '1' : '0';
+                }
+            }
+        }
+
+        return [
+            'caras' => $caras,
+            'download_rotation' => $downloadRotation,
+        ];
+    }
+
+    private function getDefaultFaceConfig(string $faceKey): array
+    {
+        $visible = $faceKey === 'anverso' ? '1' : '0';
+        $isReverso = $faceKey === 'reverso';
+
+        return [
+            'url_fondo' => '',
+            '_canvas' => ['width' => '360', 'height' => '540'],
+            'foto' => ['visible' => $visible, 'top' => '120', 'left' => '30', 'width' => '80', 'height' => '80'],
+            'nombre' => ['visible' => $visible, 'top' => '220', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00', 'color' => '#000000'],
+            'tipo_socio' => ['visible' => $visible, 'top' => '235', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00', 'color' => '#000000'],
+            'num_socio' => ['visible' => $visible, 'top' => '250', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00', 'color' => '#000000'],
+            'valido_hasta' => ['visible' => $visible, 'top' => '280', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00', 'color' => '#000000'],
+            'texto_legal' => [
+                'visible' => $isReverso ? '1' : '0',
+                'top' => '340',
+                'left' => '24',
+                'max_width' => '312',
+                'height' => '56',
+                'align' => 'left',
+                'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif",
+                'font_scale' => '0.62',
+                'color' => '#ffffff',
+                'text' => $isReverso ? 'Documento personal e intransferible. Su uso indebido puede conllevar la baja de la entidad.' : '',
+            ],
+            'instrucciones' => [
+                'visible' => $isReverso ? '1' : '0',
+                'top' => '402',
+                'left' => '24',
+                'max_width' => '312',
+                'height' => '96',
+                'align' => 'left',
+                'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif",
+                'font_scale' => '0.70',
+                'color' => '#ffffff',
+                'text' => $isReverso ? "1. Presentar este carnet al acceder.\n2. Comunicar cualquier incidencia a secretaría." : '',
+            ],
+            'qr' => [
+                'visible' => $isReverso ? '1' : '0',
+                'top' => '52',
+                'left' => '248',
+                'width' => '88',
+                'height' => '88',
+                'value' => '',
+                'image_url' => '',
+            ],
+        ];
+    }
+
+    private function resolveFaceBackgroundUrl(array $faceConfig, string $fallback = ''): string
+    {
+        $url = trim((string) ($faceConfig['url_fondo'] ?? ''));
+        if ($url !== '') {
+            return $url;
+        }
+
+        return $fallback;
+    }
+
+    private function resolveFaceCanvas(array $faceConfig): array
+    {
+        $width = (int) ($faceConfig['_canvas']['width'] ?? 0);
+        $height = (int) ($faceConfig['_canvas']['height'] ?? 0);
+
+        if ($width > 0 && $height > 0) {
+            return [
+                'width' => (string) $width,
+                'height' => (string) $height,
+            ];
+        }
+
+        $urlFondo = (string) ($faceConfig['url_fondo'] ?? '');
+        $path = parse_url($urlFondo, PHP_URL_PATH);
+        $path = is_string($path) ? ltrim($path, '/\\') : '';
+        $localPath = $path !== '' ? FCPATH . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path) : '';
+
+        if ($localPath !== '' && is_file($localPath)) {
+            $imgInfo = @getimagesize($localPath);
+            if (is_array($imgInfo)) {
+                $width = (int) ($imgInfo[0] ?? 0);
+                $height = (int) ($imgInfo[1] ?? 0);
+            }
+        }
+
+        return [
+            'width' => (string) ($width > 0 ? $width : 360),
+            'height' => (string) ($height > 0 ? $height : 540),
+        ];
+    }
+
+    private function faceHasVisibleContent(array $face): bool
+    {
+        if (trim((string) ($face['url_fondo'] ?? '')) !== '') {
+            return true;
+        }
+
+        foreach (['foto', 'nombre', 'tipo_socio', 'num_socio', 'valido_hasta', 'texto_legal', 'instrucciones', 'qr'] as $elementKey) {
+            if ((string) ($face[$elementKey]['visible'] ?? '0') === '1') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -535,5 +697,26 @@ class Carnet extends BaseController
         }
 
         return $redirect->with('error', $message);
+    }
+
+    public function cambiarSocio()
+    {
+        $session = session();
+        $session->remove(self::OTP_SESSION_KEY);
+        $session->remove(self::TRUSTED_DNI_SESSION_KEY);
+
+        return redirect()->to('/index.php/m')
+            ->with('info', 'Se ha eliminado el DNI recordado. Introduce el nuevo DNI para solicitar su codigo de verificacion.');
+    }
+
+    private function getTrustedDni(Session $session): string
+    {
+        $value = $session->get(self::TRUSTED_DNI_SESSION_KEY);
+
+        if (! is_string($value)) {
+            return '';
+        }
+
+        return strtoupper(trim($value));
     }
 }

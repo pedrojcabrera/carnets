@@ -17,8 +17,8 @@ class App extends BaseConfig
      * E.g., http://example.com/
      */
     public string $baseURL = ENVIRONMENT === 'production'
-        ? 'https://carnets.estovabien.es/'
-        : 'http://carnets.test/';
+        ? 'https://nCarnet.estovabien.es/'
+        : 'http://nCarnet.test/';
 
     /**
      * Allowed Hostnames in the Site URL other than the hostname in the baseURL.
@@ -33,8 +33,8 @@ class App extends BaseConfig
      */
     public array $allowedHostnames = [
         'localhost',
-        'carnets.test',
-        'carnets.estovabien.es',
+        'nCarnet.test',
+        'nCarnet.estovabien.es',
     ];
 
     /**

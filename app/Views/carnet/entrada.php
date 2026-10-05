@@ -12,9 +12,15 @@
     <title>Carnet Digital</title>
     <?php
     $dni = isset($dni) && is_string($dni) ? $dni : '';
+    $trustedDni = isset($trusted_dni) && is_string($trusted_dni) ? $trusted_dni : '';
     $error = isset($error) && is_string($error) ? $error : '';
     $info = isset($info) && is_string($info) ? $info : '';
     $otpRequired = isset($otp_required) && (bool) $otp_required;
+    $hasTrustedDni = trim($trustedDni) !== '';
+    $isTrustedDniPrefilled = strcasecmp(trim($dni), trim($trustedDni)) === 0;
+    $submitLabel = $otpRequired
+        ? 'Confirmar código'
+        : ($hasTrustedDni && $isTrustedDniPrefilled ? 'Abrir carnet' : 'Solicitar código');
     ?>
     <style>
         :root {
@@ -166,11 +172,27 @@
             transform: translateY(1px);
         }
 
+        .submit-btn--secondary {
+            background: transparent;
+            border: 1px solid rgba(148, 163, 184, .38);
+            color: #cbd5e1;
+            font-weight: 700;
+        }
+
+        .submit-btn--secondary:hover {
+            border-color: rgba(56, 189, 248, .62);
+            color: #e2e8f0;
+        }
+
         .hint {
             margin: .8rem 0 0;
             color: var(--muted);
             font-size: .92rem;
             line-height: 1.45;
+        }
+
+        .otp-block {
+            margin-top: .75rem;
         }
 
         .footer {
@@ -229,11 +251,11 @@
                         autofocus
                         required
                     >
-                    <button class="submit-btn" type="submit"><?= $otpRequired ? 'Confirmar código' : 'Solicitar código' ?></button>
+                    <button class="submit-btn" type="submit"><?= $submitLabel ?></button>
                 </div>
 
                 <?php if ($otpRequired): ?>
-                    <div class="mt-3">
+                    <div class="otp-block">
                         <label class="form-label" for="codigo_verificacion">Código de verificación</label>
                         <input
                             id="codigo_verificacion"
@@ -251,8 +273,21 @@
             </form>
 
             <p class="hint">
-                Introduce tu DNI. Te enviaremos un código de 6 cifras por email para validar el acceso.
+                <?php if (! $otpRequired && $hasTrustedDni && $isTrustedDniPrefilled): ?>
+                    Este dispositivo recuerda tu DNI validado. Si cambias a otro DNI, pediremos de nuevo el código de 6 cifras.
+                <?php else: ?>
+                    Introduce tu DNI. Te enviaremos un código de 6 cifras por email para validar el acceso.
+                <?php endif; ?>
             </p>
+
+            <?php if ($hasTrustedDni): ?>
+                <form method="post" action="<?= site_url('m/cambiar-socio') ?>" style="margin-top:.8rem;">
+                    <?= csrf_field() ?>
+                    <button class="submit-btn submit-btn--secondary" type="submit" style="width:100%;">
+                        Cambiar de socio
+                    </button>
+                </form>
+            <?php endif; ?>
 
             <div class="dni-row" style="margin-top:.9rem;">
                 <button class="submit-btn" id="instalarAppBtn" type="button" style="display:none; width:100%;">

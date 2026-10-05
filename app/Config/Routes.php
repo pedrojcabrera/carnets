@@ -21,6 +21,8 @@ $routes->get('logout', 'Auth::logout');
 // PWA – Carnet digital (público)
 $routes->get('m', 'Carnet::inicio');
 $routes->post('m/abrir', 'Carnet::abrir');
+$routes->post('m/cambiar-socio', 'Carnet::cambiarSocio');
+$routes->post('m/cambiar socio', 'Carnet::cambiarSocio');
 $routes->get('c/(:segment)', 'Carnet::verPorDni/$1');
 // Compatibilidad con URLs antiguas.
 $routes->get('carnet', static function () {

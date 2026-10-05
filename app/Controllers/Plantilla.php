@@ -13,6 +13,12 @@ class Plantilla extends BaseController
 {
     protected PlantillaModel $model;
 
+    private const FACE_KEYS = ['anverso', 'reverso'];
+
+    private const ELEMENT_KEYS = ['foto', 'nombre', 'tipo_socio', 'num_socio', 'valido_hasta'];
+
+    private const REVERSE_EXTRA_KEYS = ['texto_legal', 'instrucciones', 'qr'];
+
     public function __construct()
     {
         $this->model = new PlantillaModel();
@@ -25,47 +31,14 @@ class Plantilla extends BaseController
     {
         $plantilla = $this->model->getActiva();
 
-        // Posiciones por defecto si no existe plantilla
-        $posiciones = [
-            '_canvas'     => ['width' => '360', 'height' => '540'],
-            '_download'   => ['rotation' => 'keep'],
-            'foto'        => ['top' => '120', 'left' => '30',  'width' => '80',  'height' => '80'],
-            'nombre'      => ['top' => '220', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00', 'color' => '#000000'],
-            'tipo_socio'  => ['top' => '235', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00', 'color' => '#000000'],
-            'num_socio'   => ['top' => '250', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00', 'color' => '#000000'],
-            'valido_hasta'=> ['top' => '280', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00', 'color' => '#000000'],
-        ];
-
-        $canvasEnConfig = false;
-
-        if ($plantilla && ! empty($plantilla->config_posiciones)) {
-            $guardadas = json_decode($plantilla->config_posiciones, true);
-
-            if (is_array($guardadas)) {
-                $posiciones = array_replace_recursive($posiciones, $guardadas);
-                $canvasEnConfig = isset($guardadas['_canvas']) && is_array($guardadas['_canvas']);
-            }
-        }
-
-        if (! $canvasEnConfig && $plantilla && ! empty($plantilla->url_fondo)) {
-            $path = parse_url((string) $plantilla->url_fondo, PHP_URL_PATH);
-            $path = is_string($path) ? ltrim($path, '/\\') : '';
-            $localPath = $path !== '' ? FCPATH . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path) : '';
-
-            if ($localPath !== '' && is_file($localPath)) {
-                $imgInfo = @getimagesize($localPath);
-                if (is_array($imgInfo)) {
-                    $posiciones['_canvas']['width'] = (string) ((int) ($imgInfo[0] ?? 360));
-                    $posiciones['_canvas']['height'] = (string) ((int) ($imgInfo[1] ?? 540));
-                }
-            }
-        }
+        $config = $this->normalizeTemplateConfig($plantilla);
 
         return view('layouts/main', [
             'titulo'     => 'Plantilla del Carnet',
             'view_content' => 'plantilla/index',
             'plantilla'  => $plantilla,
-            'posiciones' => $posiciones,
+            'caras'      => $config['caras'],
+            'download_rotation' => $config['download_rotation'],
         ]);
     }
 
@@ -75,7 +48,9 @@ class Plantilla extends BaseController
     public function guardar()
     {
         $rules = [
-            'fondo' => 'if_exist|uploaded[fondo]|max_size[fondo,2048]|is_image[fondo]',
+            'fondo_anverso' => 'if_exist|uploaded[fondo_anverso]|max_size[fondo_anverso,2048]|is_image[fondo_anverso]',
+            'fondo_reverso' => 'if_exist|uploaded[fondo_reverso]|max_size[fondo_reverso,2048]|is_image[fondo_reverso]',
+            'reverso_qr_image' => 'if_exist|uploaded[reverso_qr_image]|max_size[reverso_qr_image,2048]|is_image[reverso_qr_image]',
         ];
 
         if (! $this->validate($rules)) {
@@ -84,96 +59,29 @@ class Plantilla extends BaseController
                 ->withInput();
         }
 
-        // Recoger posiciones del formulario
-        $posiciones = [
-            'foto' => [
-                'top'    => $this->request->getPost('foto_top'),
-                'left'   => $this->request->getPost('foto_left'),
-                'width'  => $this->request->getPost('foto_width'),
-                'height' => $this->request->getPost('foto_height'),
-            ],
-            'nombre' => [
-                'top'       => $this->request->getPost('nombre_top'),
-                'left'      => $this->request->getPost('nombre_left'),
-                'max_width' => $this->request->getPost('nombre_max_width'),
-                'align'     => $this->request->getPost('nombre_align'),
-                'font_family' => $this->request->getPost('nombre_font_family'),
-                'font_scale' => $this->request->getPost('nombre_font_scale'),
-                'color' => $this->sanitizeHexColor((string) $this->request->getPost('nombre_color')),
-            ],
-            'tipo_socio' => [
-                'top'       => $this->request->getPost('tipo_socio_top'),
-                'left'      => $this->request->getPost('tipo_socio_left'),
-                'max_width' => $this->request->getPost('tipo_socio_max_width'),
-                'align'     => $this->request->getPost('tipo_socio_align'),
-                'font_family' => $this->request->getPost('tipo_socio_font_family'),
-                'font_scale' => $this->request->getPost('tipo_socio_font_scale'),
-                'color' => $this->sanitizeHexColor((string) $this->request->getPost('tipo_socio_color')),
-            ],
-            'num_socio' => [
-                'top'       => $this->request->getPost('num_socio_top'),
-                'left'      => $this->request->getPost('num_socio_left'),
-                'max_width' => $this->request->getPost('num_socio_max_width'),
-                'align'     => $this->request->getPost('num_socio_align'),
-                'font_family' => $this->request->getPost('num_socio_font_family'),
-                'font_scale' => $this->request->getPost('num_socio_font_scale'),
-                'color' => $this->sanitizeHexColor((string) $this->request->getPost('num_socio_color')),
-            ],
-            'valido_hasta' => [
-                'top'       => $this->request->getPost('valido_hasta_top'),
-                'left'      => $this->request->getPost('valido_hasta_left'),
-                'max_width' => $this->request->getPost('valido_hasta_max_width'),
-                'align'     => $this->request->getPost('valido_hasta_align'),
-                'font_family' => $this->request->getPost('valido_hasta_font_family'),
-                'font_scale' => $this->request->getPost('valido_hasta_font_scale'),
-                'color' => $this->sanitizeHexColor((string) $this->request->getPost('valido_hasta_color')),
-            ],
-        ];
-
         $plantillaActual = $this->model->getActiva();
-        $urlFondo        = $plantillaActual->url_fondo ?? null;
 
-        $canvasWidth = (int) ($this->request->getPost('fondo_width') ?? 0);
-        $canvasHeight = (int) ($this->request->getPost('fondo_height') ?? 0);
+        $configActual = $this->normalizeTemplateConfig($plantillaActual);
+        $caras = [];
 
-        if ($plantillaActual && ! empty($plantillaActual->config_posiciones)) {
-            $guardadas = json_decode($plantillaActual->config_posiciones, true);
-
-            if (is_array($guardadas) && isset($guardadas['_canvas']) && is_array($guardadas['_canvas'])) {
-                $canvasWidth = $canvasWidth > 0 ? $canvasWidth : (int) ($guardadas['_canvas']['width'] ?? 0);
-                $canvasHeight = $canvasHeight > 0 ? $canvasHeight : (int) ($guardadas['_canvas']['height'] ?? 0);
-            }
+        foreach (self::FACE_KEYS as $faceKey) {
+            $caras[$faceKey] = $this->buildFaceConfigFromRequest($faceKey, $configActual['caras'][$faceKey] ?? $this->getDefaultFaceConfig($faceKey));
+            $caras[$faceKey]['url_fondo'] = $this->resolveUploadedBackground($faceKey, $caras[$faceKey]);
+            $caras[$faceKey] = $this->resolveUploadedQrImage($faceKey, $caras[$faceKey]);
         }
 
-        // Subir nueva imagen de fondo si se ha enviado
-        $file = $this->request->getFile('fondo');
-        if ($file && $file->isValid() && ! $file->hasMoved()) {
-            $imgInfo = @getimagesize($file->getTempName());
-            if (is_array($imgInfo)) {
-                $canvasWidth = (int) ($imgInfo[0] ?? 0);
-                $canvasHeight = (int) ($imgInfo[1] ?? 0);
-            }
-
-            $nuevoNombre = 'base.' . $file->getExtension();
-            $file->move(FCPATH . 'carnet', $nuevoNombre, true);
-            $urlFondo = '/carnet/' . $nuevoNombre;
-        }
-
-        $canvasWidth = $canvasWidth > 0 ? $canvasWidth : 360;
-        $canvasHeight = $canvasHeight > 0 ? $canvasHeight : 540;
-
-        $posiciones['_canvas'] = [
-            'width' => (string) $canvasWidth,
-            'height' => (string) $canvasHeight,
-        ];
-
-        $posiciones['_download'] = [
-            'rotation' => $this->sanitizeDownloadRotation((string) $this->request->getPost('download_rotation')),
+        $configPosiciones = [
+            '_version' => 'dual-face-v2',
+            '_download' => [
+                'rotation' => $this->sanitizeDownloadRotation((string) $this->request->getPost('download_rotation')),
+            ],
+            'anverso' => $caras['anverso'],
+            'reverso' => $caras['reverso'],
         ];
 
         $datos = [
-            'url_fondo'         => $urlFondo,
-            'config_posiciones' => json_encode($posiciones),
+            'url_fondo'         => $caras['anverso']['url_fondo'] ?: null,
+            'config_posiciones' => json_encode($configPosiciones),
             'activa'            => 1,
         ];
 
@@ -211,5 +119,284 @@ class Plantilla extends BaseController
         }
 
         return 'keep';
+    }
+
+    private function sanitizeTextAlign(string $value): string
+    {
+        $value = strtolower(trim($value));
+
+        if (in_array($value, ['left', 'center', 'right', 'justify'], true)) {
+            return $value;
+        }
+
+        return 'left';
+    }
+
+    private function normalizeTemplateConfig(?object $plantilla): array
+    {
+        $caras = [
+            'anverso' => $this->getDefaultFaceConfig('anverso'),
+            'reverso' => $this->getDefaultFaceConfig('reverso'),
+        ];
+        $downloadRotation = 'keep';
+
+        if (! $plantilla) {
+            return [
+                'caras' => $caras,
+                'download_rotation' => $downloadRotation,
+            ];
+        }
+
+        $guardadas = [];
+        if (! empty($plantilla->config_posiciones)) {
+            $decoded = json_decode((string) $plantilla->config_posiciones, true);
+            $guardadas = is_array($decoded) ? $decoded : [];
+        }
+
+        $isDualFace = isset($guardadas['anverso']) && is_array($guardadas['anverso']);
+
+        if ($isDualFace) {
+            foreach (self::FACE_KEYS as $faceKey) {
+                $caras[$faceKey] = $this->mergeFaceConfig(
+                    $caras[$faceKey],
+                    is_array($guardadas[$faceKey] ?? null) ? $guardadas[$faceKey] : []
+                );
+            }
+        } else {
+            $caras['anverso'] = $this->mergeFaceConfig($caras['anverso'], $guardadas);
+        }
+
+        if (! empty($plantilla->url_fondo)) {
+            $caras['anverso']['url_fondo'] = (string) $plantilla->url_fondo;
+        }
+
+        foreach (self::FACE_KEYS as $faceKey) {
+            $caras[$faceKey]['url_fondo'] = $this->resolveFaceBackgroundUrl($caras[$faceKey], $faceKey === 'anverso' ? (string) ($plantilla->url_fondo ?? '') : '');
+            $caras[$faceKey]['_canvas'] = $this->resolveFaceCanvas($caras[$faceKey]);
+        }
+
+        $downloadRotation = $this->sanitizeDownloadRotation((string) ($guardadas['_download']['rotation'] ?? 'keep'));
+
+        return [
+            'caras' => $caras,
+            'download_rotation' => $downloadRotation,
+        ];
+    }
+
+    private function getDefaultFaceConfig(string $faceKey): array
+    {
+        $visible = $faceKey === 'anverso';
+        $isReverso = $faceKey === 'reverso';
+
+        return [
+            'url_fondo' => '',
+            '_canvas' => ['width' => '360', 'height' => '540'],
+            'foto' => ['visible' => $visible ? '1' : '0', 'top' => '120', 'left' => '30', 'width' => '80', 'height' => '80'],
+            'nombre' => ['visible' => $visible ? '1' : '0', 'top' => '220', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00', 'color' => '#000000'],
+            'tipo_socio' => ['visible' => $visible ? '1' : '0', 'top' => '235', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00', 'color' => '#000000'],
+            'num_socio' => ['visible' => $visible ? '1' : '0', 'top' => '250', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00', 'color' => '#000000'],
+            'valido_hasta' => ['visible' => $visible ? '1' : '0', 'top' => '280', 'left' => '30', 'max_width' => '220', 'align' => 'left', 'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif", 'font_scale' => '1.00', 'color' => '#000000'],
+            'texto_legal' => [
+                'visible' => $isReverso ? '1' : '0',
+                'top' => '340',
+                'left' => '24',
+                'max_width' => '312',
+                'height' => '56',
+                'align' => 'left',
+                'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif",
+                'font_scale' => '0.62',
+                'color' => '#ffffff',
+                'text' => $isReverso ? 'Documento personal e intransferible. Su uso indebido puede conllevar la baja de la entidad.' : '',
+            ],
+            'instrucciones' => [
+                'visible' => $isReverso ? '1' : '0',
+                'top' => '402',
+                'left' => '24',
+                'max_width' => '312',
+                'height' => '96',
+                'align' => 'left',
+                'font_family' => "'Noto Sans Armenian', 'Segoe UI', system-ui, sans-serif",
+                'font_scale' => '0.70',
+                'color' => '#ffffff',
+                'text' => $isReverso ? "1. Presentar este carnet al acceder.\n2. Comunicar cualquier incidencia a secretaría." : '',
+            ],
+            'qr' => [
+                'visible' => $isReverso ? '1' : '0',
+                'top' => '52',
+                'left' => '248',
+                'width' => '88',
+                'height' => '88',
+                'value' => '',
+                'image_url' => '',
+            ],
+        ];
+    }
+
+    private function mergeFaceConfig(array $base, array $incoming): array
+    {
+        $merged = array_replace_recursive($base, $incoming);
+
+        $keys = array_merge(self::ELEMENT_KEYS, self::REVERSE_EXTRA_KEYS);
+        foreach ($keys as $elementKey) {
+            if (! isset($merged[$elementKey]['visible'])) {
+                $merged[$elementKey]['visible'] = $base[$elementKey]['visible'] ?? '0';
+            }
+        }
+
+        return $merged;
+    }
+
+    private function resolveFaceBackgroundUrl(array $faceConfig, string $fallback = ''): string
+    {
+        $url = trim((string) ($faceConfig['url_fondo'] ?? ''));
+        if ($url !== '') {
+            return $url;
+        }
+
+        return trim($fallback);
+    }
+
+    private function resolveFaceCanvas(array $faceConfig): array
+    {
+        $width = (int) ($faceConfig['_canvas']['width'] ?? 0);
+        $height = (int) ($faceConfig['_canvas']['height'] ?? 0);
+
+        if ($width > 0 && $height > 0) {
+            return [
+                'width' => (string) $width,
+                'height' => (string) $height,
+            ];
+        }
+
+        $urlFondo = (string) ($faceConfig['url_fondo'] ?? '');
+        $path = parse_url($urlFondo, PHP_URL_PATH);
+        $path = is_string($path) ? ltrim($path, '/\\') : '';
+        $localPath = $path !== '' ? FCPATH . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path) : '';
+
+        if ($localPath !== '' && is_file($localPath)) {
+            $imgInfo = @getimagesize($localPath);
+            if (is_array($imgInfo)) {
+                $width = (int) ($imgInfo[0] ?? 0);
+                $height = (int) ($imgInfo[1] ?? 0);
+            }
+        }
+
+        return [
+            'width' => (string) ($width > 0 ? $width : 360),
+            'height' => (string) ($height > 0 ? $height : 540),
+        ];
+    }
+
+    private function buildFaceConfigFromRequest(string $faceKey, array $currentFace): array
+    {
+        $face = $this->mergeFaceConfig($this->getDefaultFaceConfig($faceKey), $currentFace);
+        $prefix = $faceKey . '_';
+
+        $fieldKeys = self::ELEMENT_KEYS;
+        if ($faceKey === 'reverso') {
+            $fieldKeys = array_merge($fieldKeys, self::REVERSE_EXTRA_KEYS);
+        }
+
+        foreach ($fieldKeys as $elementKey) {
+            $face[$elementKey]['visible'] = $this->request->getPost($prefix . $elementKey . '_visible') !== null ? '1' : '0';
+        }
+
+        $face['foto']['top'] = (string) $this->request->getPost($prefix . 'foto_top');
+        $face['foto']['left'] = (string) $this->request->getPost($prefix . 'foto_left');
+        $face['foto']['width'] = (string) $this->request->getPost($prefix . 'foto_width');
+        $face['foto']['height'] = (string) $this->request->getPost($prefix . 'foto_height');
+
+        foreach (['nombre', 'tipo_socio', 'num_socio', 'valido_hasta'] as $elementKey) {
+            $face[$elementKey]['top'] = (string) $this->request->getPost($prefix . $elementKey . '_top');
+            $face[$elementKey]['left'] = (string) $this->request->getPost($prefix . $elementKey . '_left');
+            $face[$elementKey]['max_width'] = (string) $this->request->getPost($prefix . $elementKey . '_max_width');
+            $face[$elementKey]['align'] = $this->sanitizeTextAlign((string) $this->request->getPost($prefix . $elementKey . '_align'));
+            $face[$elementKey]['font_family'] = (string) $this->request->getPost($prefix . $elementKey . '_font_family');
+            $face[$elementKey]['font_scale'] = (string) $this->request->getPost($prefix . $elementKey . '_font_scale');
+            $face[$elementKey]['color'] = $this->sanitizeHexColor((string) $this->request->getPost($prefix . $elementKey . '_color'));
+        }
+
+        if ($faceKey === 'reverso') {
+            foreach (['texto_legal', 'instrucciones'] as $elementKey) {
+                $face[$elementKey]['top'] = (string) $this->request->getPost($prefix . $elementKey . '_top');
+                $face[$elementKey]['left'] = (string) $this->request->getPost($prefix . $elementKey . '_left');
+                $face[$elementKey]['max_width'] = (string) $this->request->getPost($prefix . $elementKey . '_max_width');
+                $face[$elementKey]['height'] = (string) $this->request->getPost($prefix . $elementKey . '_height');
+                $face[$elementKey]['align'] = $this->sanitizeTextAlign((string) $this->request->getPost($prefix . $elementKey . '_align'));
+                $face[$elementKey]['font_family'] = (string) $this->request->getPost($prefix . $elementKey . '_font_family');
+                $face[$elementKey]['font_scale'] = (string) $this->request->getPost($prefix . $elementKey . '_font_scale');
+                $face[$elementKey]['color'] = $this->sanitizeHexColor((string) $this->request->getPost($prefix . $elementKey . '_color'));
+                $face[$elementKey]['text'] = $this->sanitizeMultilineText((string) $this->request->getPost($prefix . $elementKey . '_text'));
+            }
+
+            $face['qr']['top'] = (string) $this->request->getPost($prefix . 'qr_top');
+            $face['qr']['left'] = (string) $this->request->getPost($prefix . 'qr_left');
+            $face['qr']['width'] = (string) $this->request->getPost($prefix . 'qr_width');
+            $face['qr']['height'] = (string) $this->request->getPost($prefix . 'qr_height');
+            $face['qr']['value'] = trim((string) $this->request->getPost($prefix . 'qr_value'));
+
+            if ($this->request->getPost($prefix . 'qr_clear_image') !== null) {
+                $face['qr']['image_url'] = '';
+            }
+        }
+
+        $face['_canvas'] = [
+            'width' => (string) max(1, (int) ($this->request->getPost($prefix . 'fondo_width') ?: ($face['_canvas']['width'] ?? 360))),
+            'height' => (string) max(1, (int) ($this->request->getPost($prefix . 'fondo_height') ?: ($face['_canvas']['height'] ?? 540))),
+        ];
+
+        return $face;
+    }
+
+    private function resolveUploadedBackground(string $faceKey, array &$face): string
+    {
+        $existing = trim((string) ($face['url_fondo'] ?? ''));
+        $file = $this->request->getFile('fondo_' . $faceKey);
+
+        if (! $file || ! $file->isValid() || $file->hasMoved()) {
+            return $existing;
+        }
+
+        $imgInfo = @getimagesize($file->getTempName());
+        if (is_array($imgInfo)) {
+            $face['_canvas'] = [
+                'width' => (string) ((int) ($imgInfo[0] ?? 360)),
+                'height' => (string) ((int) ($imgInfo[1] ?? 540)),
+            ];
+        }
+
+        $baseName = $faceKey === 'anverso' ? 'base' : 'base-reverso';
+        $nuevoNombre = $baseName . '.' . $file->getExtension();
+        $file->move(FCPATH . 'carnet', $nuevoNombre, true);
+
+        return '/carnet/' . $nuevoNombre;
+    }
+
+    private function sanitizeMultilineText(string $value): string
+    {
+        $normalized = str_replace(["\r\n", "\r"], "\n", trim($value));
+        return mb_substr($normalized, 0, 700);
+    }
+
+    private function resolveUploadedQrImage(string $faceKey, array $face): array
+    {
+        if (! is_array($face['qr'] ?? null)) {
+            return $face;
+        }
+
+        $existing = trim((string) ($face['qr']['image_url'] ?? ''));
+        $file = $this->request->getFile($faceKey . '_qr_image');
+
+        if (! $file || ! $file->isValid() || $file->hasMoved()) {
+            $face['qr']['image_url'] = $existing;
+            return $face;
+        }
+
+        $nuevoNombre = 'qr-' . $faceKey . '.' . $file->getExtension();
+        $file->move(FCPATH . 'carnet', $nuevoNombre, true);
+
+        $face['qr']['image_url'] = '/carnet/' . $nuevoNombre;
+
+        return $face;
     }
 }
