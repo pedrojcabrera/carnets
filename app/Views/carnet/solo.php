@@ -414,7 +414,32 @@
                 return;
             }
 
-            navigator.serviceWorker.register('/service-worker.js').catch(function () {});
+            navigator.serviceWorker.register('/service-worker.js')
+                .then(function () {
+                    return navigator.serviceWorker.ready;
+                })
+                .then(function (registration) {
+                    if (navigator.serviceWorker.controller || !registration.active) {
+                        return;
+                    }
+
+                    registration.active.postMessage({
+                        type: 'CACHE_CURRENT_CARNET',
+                        url: window.location.href,
+                        images: Array.from(document.images)
+                            .map(function (asset) {
+                                return asset.currentSrc || asset.src;
+                            }),
+                        scripts: Array.from(document.scripts)
+                            .map(function (asset) {
+                                return asset.src;
+                            })
+                            .filter(Boolean),
+                    });
+                })
+                .catch(function (error) {
+                    console.error('No se pudo preparar el carnet para uso sin conexión.', error);
+                });
         }());
 
         (function () {
