@@ -132,10 +132,6 @@
             overscroll-behavior-x: contain;
         }
 
-        .carnet-stage.is-rotated {
-            overflow-y: hidden;
-        }
-
         .carnet-stage::-webkit-scrollbar {
             display: none;
         }
@@ -496,8 +492,6 @@
             let currentScale = 1;
             let scrollAnimationFrame = null;
             let snapTimer = null;
-            let orientationLocked = false;
-            let visualRotation = 'none';
             const mobileOrientationRegex = /android|iphone|ipad|ipod|iemobile|opera mini|mobile/i;
 
             function shouldApplyTemplateOrientation() {
@@ -554,25 +548,13 @@
                     + (dotsEl ? dotsEl.offsetHeight : 0)
                     + extraVertical;
 
-                const requiresLandscape = preferredScreenOrientation() === 'landscape' && !orientationLocked;
-                const effectiveBaseWidth = requiresLandscape ? baseHeight : baseWidth;
-                const effectiveBaseHeight = requiresLandscape ? baseWidth : baseHeight;
                 const availableWidth = Math.max(140, window.innerWidth - horizontalPadding * 2);
                 const availableHeight = Math.max(140, window.innerHeight - controlsHeight);
-                const scale = Math.min(1, availableWidth / effectiveBaseWidth, availableHeight / effectiveBaseHeight);
+                const scale = Math.min(1, availableWidth / baseWidth, availableHeight / baseHeight);
                 currentScale = scale;
 
-                if (requiresLandscape) {
-                    stage.classList.add('is-rotated');
-                    stage.style.width = Math.floor(effectiveBaseWidth * scale) + 'px';
-                    stage.style.height = Math.floor(effectiveBaseHeight * scale) + 'px';
-                    visualRotation = getEffectiveRotation() === 'left' ? 'left' : 'right';
-                } else {
-                    stage.classList.remove('is-rotated');
-                    stage.style.width = Math.floor(effectiveBaseWidth * scale) + 'px';
-                    stage.style.height = Math.floor(effectiveBaseHeight * scale) + 'px';
-                    visualRotation = 'none';
-                }
+                stage.style.width = Math.floor(baseWidth * scale) + 'px';
+                stage.style.height = Math.floor(baseHeight * scale) + 'px';
 
                 updateSwipeMotion();
 
@@ -623,23 +605,8 @@
                 slideScales.forEach((scaleNode, index) => {
                     const distance = Math.min(1, Math.abs(activePosition - index));
                     const offset = (activePosition - index) * 10;
-                    const localScale = visualRotation === 'none'
-                        ? Math.max(0.985, 1 - distance * 0.015)
-                        : 1;
+                    const localScale = Math.max(0.985, 1 - distance * 0.015);
                     const finalScale = currentScale * localScale;
-
-                    if (visualRotation === 'right') {
-                        const shiftY = baseWidth * finalScale;
-                        scaleNode.style.transform = 'translateY(' + shiftY + 'px) rotate(-90deg) scale(' + finalScale + ')';
-                        return;
-                    }
-
-                    if (visualRotation === 'left') {
-                        const shiftX = baseHeight * finalScale;
-                        scaleNode.style.transform = 'translateX(' + shiftX + 'px) rotate(90deg) scale(' + finalScale + ')';
-                        return;
-                    }
-
                     scaleNode.style.transform = 'translateX(' + offset + 'px) scale(' + finalScale + ')';
                 });
             }
@@ -949,35 +916,6 @@
                 });
             });
 
-            function preferredScreenOrientation() {
-                const rotation = getEffectiveRotation();
-                if (rotation === 'right' || rotation === 'left') {
-                    return 'landscape';
-                }
-
-                return 'portrait';
-            }
-
-            async function lockOrientationIfPossible() {
-                if (!shouldApplyTemplateOrientation()) {
-                    orientationLocked = false;
-                    return;
-                }
-
-                if (!screen.orientation || typeof screen.orientation.lock !== 'function') {
-                    orientationLocked = false;
-                    return;
-                }
-
-                try {
-                    await screen.orientation.lock(preferredScreenOrientation());
-                    orientationLocked = true;
-                } catch (error) {
-                    // Algunos navegadores solo permiten lock en PWA instalada o fullscreen.
-                    orientationLocked = false;
-                }
-            }
-
             if (stage) {
                 stage.scrollLeft = 0;
             }
@@ -989,7 +927,6 @@
             }
 
             renderQrCodes(document);
-            lockOrientationIfPossible();
             ajustarEscalaVista();
             updateViewerUi();
             updateSwipeMotion();
