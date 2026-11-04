@@ -916,6 +916,18 @@
                 });
             });
 
+            async function lockLandscapeOrientation() {
+                if (!shouldApplyTemplateOrientation() || typeof screen.orientation?.lock !== 'function') {
+                    return;
+                }
+
+                try {
+                    await screen.orientation.lock('landscape');
+                } catch (error) {
+                    console.warn('El navegador no permite mantener el carnet en apaisado en esta ventana.', error);
+                }
+            }
+
             if (stage) {
                 stage.scrollLeft = 0;
             }
@@ -926,6 +938,8 @@
                 });
             }
 
+            lockLandscapeOrientation();
+            document.addEventListener('pointerdown', lockLandscapeOrientation, { once: true, passive: true });
             renderQrCodes(document);
             ajustarEscalaVista();
             updateViewerUi();
