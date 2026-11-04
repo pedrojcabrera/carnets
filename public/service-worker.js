@@ -21,6 +21,13 @@ function isCarnetStartPage(url) {
     return /^\/(?:index\.php\/)?m\/?$/.test(pathname);
 }
 
+function getCarnetPath(url) {
+    return new URL(url, self.location.origin).pathname
+        .replace(/^\/index\.php(?=\/)/, '')
+        .replace(/\/+$/, '')
+        .toLowerCase();
+}
+
 function isCacheableAsset(request, url) {
     return url.origin === self.location.origin
         || (request.destination === 'image' && ['http:', 'https:'].includes(url.protocol))
@@ -29,7 +36,13 @@ function isCacheableAsset(request, url) {
 
 async function cacheCarnetPage(request, response) {
     const contentType = response.headers.get('content-type') || '';
-    if (!response.ok || !contentType.includes('text/html') || !isCarnetPage(request.url)) {
+    if (
+        !response.ok
+        || !contentType.includes('text/html')
+        || !isCarnetPage(request.url)
+        || !isCarnetPage(response.url)
+        || getCarnetPath(request.url) !== getCarnetPath(response.url)
+    ) {
         return;
     }
 

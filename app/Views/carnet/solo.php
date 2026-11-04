@@ -407,6 +407,7 @@
         </button>
     </div>
     <p class="status" id="downloadStatus"></p>
+    <p class="status" id="offlineStorageStatus" role="status" aria-live="polite"></p>
 
     <script>
         (function () {
@@ -439,6 +440,35 @@
                 })
                 .catch(function (error) {
                     console.error('No se pudo preparar el carnet para uso sin conexión.', error);
+                });
+        }());
+
+        (function () {
+            const status = document.getElementById('offlineStorageStatus');
+            const storage = navigator.storage;
+
+            if (!status || !storage || typeof storage.persist !== 'function') {
+                if (status) {
+                    status.textContent = 'El navegador puede eliminar el carnet guardado si necesita liberar espacio.';
+                }
+                return;
+            }
+
+            const persistence = typeof storage.persisted === 'function'
+                ? storage.persisted().then(function (isPersisted) {
+                    return isPersisted ? true : storage.persist();
+                })
+                : storage.persist();
+
+            persistence
+                .then(function (isPersisted) {
+                    status.textContent = isPersisted
+                        ? 'El almacenamiento de la app está protegido frente a limpieza automática.'
+                        : 'El navegador puede eliminar el carnet guardado si necesita liberar espacio.';
+                })
+                .catch(function (error) {
+                    console.error('No se pudo solicitar almacenamiento persistente para el carnet.', error);
+                    status.textContent = 'No se pudo garantizar que el carnet siga guardado sin conexión.';
                 });
         }());
 
